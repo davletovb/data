@@ -69,7 +69,7 @@ def main():
             results.append(followers)
         elif row[0]=='YouTube':
             url = row[1]
-            channel_id = get_telegram_url(url)
+            channel_id = get_youtube_url(url)
             subscribers = get_youtube_subscribers(channel_id)
             results.append(subscribers)
         else:
