@@ -2,11 +2,13 @@ from __future__ import print_function
 import pickle
 import os.path
 import requests
+import random
 import time
 import json
 import urllib.parse
 import re
 import datetime
+from bs4 import BeautifulSoup as bs
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -16,10 +18,10 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # The ID and range of a sample spreadsheet.
 APPLICATION_NAME = "Google Sheets API Python"
-TELEGRAM_BOT_ID="TOKEN"
+TELEGRAM_BOT_ID=["TOKEN"]
 SPREADSHEET_ID = "ID"
-RANGE_NAME = "RANGE"
-YOUTUBE_API_KEY="API KEY"
+YOUTUBE_API_KEY="KEY"
+PROXIES=['ADDRESS']
 
 def main():
     """Shows basic usage of the Sheets API.
@@ -48,24 +50,26 @@ def main():
 
     # Call the Sheets API
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
-    values = result.get('values', [])
-
     sheet_name, column, size = get_range(sheet)
-    start_row =2
+    start_row = 2
+    end_row = size
+    working_range = sheet_name+"!D"+str(start_row)+":E"+str(end_row)
+    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=working_range).execute()
+    values = result.get('values', [])
 
     results=[]
 
     for i, row in enumerate(values):
-        print(str(i)+": "+row[1])
+        print(datetime.datetime.now().strftime("%H:%M:%S")+" - "+str(i)+" - "+row[1])
         if row[0]=='Telegram':
-            link = row[1]
-            url = get_telegram_url(link)
+            url = row[1]
             subscribers = get_telegram_subscribers(url)
+            print(subscribers)
             results.append(subscribers)
         elif row[0]=='Instagram':
             url = row[1]
             followers = get_instagram_followers(url)
+            print(followers)
             results.append(followers)
         elif row[0]=='YouTube':
             url = row[1]
@@ -74,20 +78,23 @@ def main():
             results.append(subscribers)
         else:
             results.append("")
-
-    save_to_sheet(sheet, sheet_name+"!"+column+str(start_row)+":"+column+str(size), results)
+    
+    save_to_sheet(sheet, sheet_name+"!"+column+str(start_row)+":"+column+str(end_row), results)
     save_date(sheet, sheet_name+"!"+column+str(1))
 
 def get_telegram_subscribers(url):
     try:
-        time.sleep(5)
-        response = requests.get(url)
-  
-        if response.status_code==200:
-            response_json=json.loads(response.text)
-            subscribers=response_json["result"]
-            return subscribers
-        elif response.status_code==400:
+        time.sleep(random.uniform(3.0,10.0))
+        response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
+        soup = bs(response.text, 'html.parser')
+        result = soup.findAll('div', {'class':'tgme_page_extra'})
+        if result:
+            subscribers = re.split(r'\s\D',result[0].text.strip())[0].replace(" ","")
+            if subscribers.isdigit():
+                return subscribers
+            else:
+                return "NA"
+        elif not result:
             return "NA"
     except requests.exceptions.HTTPError as errh:
         print ("Http Error:",errh)
@@ -100,8 +107,8 @@ def get_telegram_subscribers(url):
 
 def get_instagram_followers(url):
     try:
-        time.sleep(3)
-        response = requests.get(url)
+        time.sleep(random.uniform(3.0,15.0))
+        response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
         if response.status_code==200:
             try:
                 response_json = extract_shared_data_from_body(response.text)
@@ -153,8 +160,9 @@ def save_date(sheet, range_name):
     print('{} cells updated.'.format(result.get('updatedCells')))
 
 def get_telegram_url(chat_url):
-    chat_id="@"+chat_url[13:]
-    url = "https://api.telegram.org/{}/getChatMembersCount?chat_id={}".format(TELEGRAM_BOT_ID, chat_id)
+    chat_id = "@"+chat_url[13:]
+    bot_id = TELEGRAM_BOT_ID[random.randint(0,3)]
+    url = "https://api.telegram.org/{}/getChatMembersCount?chat_id={}".format(bot_id, chat_id)
     return url
 
 def get_youtube_url(channel_url):
