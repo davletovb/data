@@ -8,6 +8,7 @@ import json
 import urllib.parse
 import re
 import datetime
+from selenium import webdriver
 from bs4 import BeautifulSoup as bs
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -18,7 +19,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # The ID and range of a sample spreadsheet.
 APPLICATION_NAME = "Google Sheets API Python"
-TELEGRAM_BOT_ID=["TOKEN"]
+TELEGRAM_BOT_ID=["ID"]
 SPREADSHEET_ID = "ID"
 YOUTUBE_API_KEY="KEY"
 PROXIES=['ADDRESS']
@@ -47,6 +48,7 @@ def main():
             pickle.dump(creds, token)
 
     service = build('sheets', 'v4', credentials=creds)
+    driver = webdriver.Firefox(executable_path="C:\Drivers\geckodriver.exe")
 
     # Call the Sheets API
     sheet = service.spreadsheets()
@@ -63,6 +65,7 @@ def main():
         print(datetime.datetime.now().strftime("%H:%M:%S")+" - "+str(i)+" - "+row[1])
         if row[0]=='Telegram':
             url = row[1]
+            link = get_telegram_url(url)
             subscribers = get_telegram_subscribers(url)
             print(subscribers)
             results.append(subscribers)
@@ -76,15 +79,26 @@ def main():
             channel_id = get_youtube_url(url)
             subscribers = get_youtube_subscribers(channel_id)
             results.append(subscribers)
+        elif row[0]=='VK':
+            url = row[1]
+            followers = get_vk_followers(url, driver)
+            print(followers)
+            results.append(followers)
+        elif row[0]=='OK':
+            url = row[1]
+            followers = get_ok_followers(url, driver)
+            print(followers)
+            results.append(followers)
         else:
             results.append("")
     
     save_to_sheet(sheet, sheet_name+"!"+column+str(start_row)+":"+column+str(end_row), results)
     save_date(sheet, sheet_name+"!"+column+str(1))
+    #driver.quit()
 
 def get_telegram_subscribers(url):
     try:
-        time.sleep(random.uniform(3.0,10.0))
+        time.sleep(random.uniform(3.0,7.0))
         response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
         soup = bs(response.text, 'html.parser')
         result = soup.findAll('div', {'class':'tgme_page_extra'})
@@ -107,7 +121,7 @@ def get_telegram_subscribers(url):
 
 def get_instagram_followers(url):
     try:
-        time.sleep(random.uniform(3.0,15.0))
+        time.sleep(random.uniform(3.0,7.0))
         response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
         if response.status_code==200:
             try:
@@ -149,6 +163,42 @@ def get_youtube_subscribers(url):
     except requests.exceptions.RequestException as err:
         print ("OOps: Something Else",err)
 
+def get_vk_followers(url, driver):
+    try:
+        driver.get(url)
+        soup = bs(driver.page_source,"lxml")
+        result = soup.findAll("div",{"class":"count"})
+        if result:
+            followers = result[0].text.replace(",","")
+            return followers
+        else:
+            result = soup.find("div",{"id":["public_followers","group_followers"]})
+            if result is not None:
+                followers = result.find("span",{"class":"header_count"}).text.replace(",","")
+                return followers
+            else:
+                return "NA"
+    except:
+        return "NA"
+
+def get_ok_followers(url, driver):
+    try:
+        driver.get(url)
+        soup = bs(driver.page_source,"lxml")
+        result = soup.find("span",{"class":"portlet_h_count"})
+        if result:
+            followers = result.text.replace(" ","")
+            return followers
+        else:
+            result = soup.find("span",{"class":"navMenuCount"})
+            if result is not None:
+                followers = result.text.replace(" ","")
+                return followers
+            else:
+                return "NA"
+    except:
+        return "NA"
+        
 def save_to_sheet(sheet, range_name, values):
     body = {'values': [values], 'majorDimension' : 'COLUMNS'}
     result = sheet.values().update(spreadsheetId=SPREADSHEET_ID, range=range_name, valueInputOption="USER_ENTERED", body=body).execute()
