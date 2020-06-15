@@ -3,13 +3,14 @@ import pickle
 import os.path
 import requests
 import random
-import time
 import json
 import urllib.parse
 import re
 import datetime
+from time import sleep
 from selenium import webdriver
 from bs4 import BeautifulSoup as bs
+from pypac import PACSession, get_pac
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -19,10 +20,20 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # The ID and range of a sample spreadsheet.
 APPLICATION_NAME = "Google Sheets API Python"
-TELEGRAM_BOT_ID=["ID"]
+TELEGRAM_BOT_ID = [
+    "BOT ID"]
 SPREADSHEET_ID = "ID"
-YOUTUBE_API_KEY="KEY"
-PROXIES=['ADDRESS']
+YOUTUBE_API_KEY = "API KEY"
+PROXIES = [
+    'IP ADDRESS']
+PROXY = "PAC FILE URL"
+PAC = get_pac(url=PROXY)
+GECKO_PATH = "GECKO PATH"
+INSTAGRAM_ACCOUNT = {
+  0 : {
+    "username" : "username",
+    "password" : "password"
+  }}
 
 def main():
     """Shows basic usage of the Sheets API.
@@ -48,7 +59,20 @@ def main():
             pickle.dump(creds, token)
 
     service = build('sheets', 'v4', credentials=creds)
-    driver = webdriver.Firefox(executable_path="C:\Drivers\geckodriver.exe")
+    
+    # Initialize browser and set up proxy
+    selenium_proxy = webdriver.Proxy()
+    selenium_proxy.proxy_type = webdriver.common.proxy.ProxyType.PAC
+    selenium_proxy.proxyAutoconfigUrl = PROXY
+    #selenium_proxy.noProxy = ".instagram.com, .duckduckgo.com"
+
+    profile = webdriver.FirefoxProfile()
+    profile.set_proxy(selenium_proxy)
+    #profile.set_preference("network.proxy.no_proxies_on", ".instagram.com, .duckduckgo.com")
+
+    driver = webdriver.Firefox(executable_path=GECKO_PATH)
+    # Login Instagram account
+    instagram_login(driver)
 
     # Call the Sheets API
     sheet = service.spreadsheets()
@@ -65,19 +89,20 @@ def main():
         print(datetime.datetime.now().strftime("%H:%M:%S")+" - "+str(i)+" - "+row[1])
         if row[0]=='Telegram':
             url = row[1]
-            link = get_telegram_url(url)
-            subscribers = get_telegram_subscribers(url)
+            #link = get_telegram_url(url)
+            subscribers = get_telegram_subscribers(url, driver)
             print(subscribers)
             results.append(subscribers)
         elif row[0]=='Instagram':
             url = row[1]
-            followers = get_instagram_followers(url)
+            followers = get_instagram_followers(url, driver)
             print(followers)
             results.append(followers)
         elif row[0]=='YouTube':
             url = row[1]
             channel_id = get_youtube_url(url)
             subscribers = get_youtube_subscribers(channel_id)
+            print(subscribers)
             results.append(subscribers)
         elif row[0]=='VK':
             url = row[1]
@@ -94,12 +119,16 @@ def main():
     
     save_to_sheet(sheet, sheet_name+"!"+column+str(start_row)+":"+column+str(end_row), results)
     save_date(sheet, sheet_name+"!"+column+str(1))
-    #driver.quit()
+    driver.quit()
 
-def get_telegram_subscribers(url):
+def get_telegram_subscribers(url, driver):
     try:
-        time.sleep(random.uniform(3.0,7.0))
+        sleep(random.uniform(3.0,7.0))
+        #session = PACSession(PAC)
+        #driver.get(url)
+        #soup = bs(driver.page_source,"lxml")
         response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
+        #response = session.get(url)
         soup = bs(response.text, 'html.parser')
         result = soup.findAll('div', {'class':'tgme_page_extra'})
         if result:
@@ -119,18 +148,19 @@ def get_telegram_subscribers(url):
     except requests.exceptions.RequestException as err:
         print ("OOps: Something Else",err)
 
-def get_instagram_followers(url):
+def get_instagram_followers(url, driver):
     try:
-        time.sleep(random.uniform(3.0,7.0))
-        response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
-        if response.status_code==200:
-            try:
-                response_json = extract_shared_data_from_body(response.text)
-                followers=response_json['entry_data']['ProfilePage'][0]['graphql']['user']['edge_followed_by']['count']
+        sleep(random.uniform(3.0,7.0))
+        driver.get(url)
+        soup = bs(driver.page_source,"lxml")
+        result = soup.findAll("span",{"class":"g47SY"})
+        if result:
+            followers = result[1].text.replace(",","")
+            if followers[-1]=="k":
+                followers = int(float(followers[:-1]) * 1000)
                 return followers
-            except:
-                return "NA"
-        elif response.status_code==400:
+            return followers
+        else:
             return "NA"
     except requests.exceptions.HTTPError as errh:
         print ("Http Error:",errh)
@@ -141,18 +171,27 @@ def get_instagram_followers(url):
     except requests.exceptions.RequestException as err:
         print ("OOps: Something Else",err)
 
+def instagram_login(driver):
+    account = INSTAGRAM_ACCOUNT[random.randint(0,2)]
+    driver.get('https://www.instagram.com/accounts/login/')
+    print("Logging in: "+account["username"])
+    sleep(3)
+    driver.find_element_by_name("username").send_keys(account["username"])
+    sleep(1)
+    driver.find_element_by_name("password").send_keys(account["password"])
+    sleep(1)
+    driver.find_element_by_tag_name('form').submit()
+    sleep(3)
+
 def get_youtube_subscribers(url):
     try:
-        time.sleep(3)
+        sleep(2)
         response = requests.get(url)
-        if response.status_code==200:
-            try:
-                response_json = response.json()
-                subscribers = response_json["items"][0]["statistics"]["subscriberCount"]
-                return subscribers
-            except:
-                return "NA"
-        elif response.status_code==400:
+        response_json = response.json()
+        if "items" in response_json:
+            subscribers = response_json["items"][0]["statistics"]["subscriberCount"]
+            return subscribers
+        else:
             return "NA"
     except requests.exceptions.HTTPError as errh:
         print ("Http Error:",errh)
@@ -165,6 +204,7 @@ def get_youtube_subscribers(url):
 
 def get_vk_followers(url, driver):
     try:
+        sleep(3)
         driver.get(url)
         soup = bs(driver.page_source,"lxml")
         result = soup.findAll("div",{"class":"count"})
@@ -183,16 +223,17 @@ def get_vk_followers(url, driver):
 
 def get_ok_followers(url, driver):
     try:
+        sleep(3)
         driver.get(url)
         soup = bs(driver.page_source,"lxml")
         result = soup.find("span",{"class":"portlet_h_count"})
         if result:
-            followers = result.text.replace(" ","")
+            followers = int(''.join(filter(str.isdigit, result.text)))
             return followers
         else:
             result = soup.find("span",{"class":"navMenuCount"})
             if result is not None:
-                followers = result.text.replace(" ","")
+                followers = int(''.join(filter(str.isdigit, fresult.text)))
                 return followers
             else:
                 return "NA"
@@ -230,19 +271,6 @@ def get_range(sheet):
     last_column = X(last_column_number)
     size = [sheet_name, last_column, last_row]
     return size
-
-def extract_shared_data_from_body(body):
-    """
-    :param body: html string from a page
-    :return: a dict extract from page
-    """
-    array = re.findall(r'_sharedData = .*?;</script>', body)
-    if len(array) > 0:
-        raw_json = array[0][len("_sharedData ="):-len(";</script>")]
-
-        return json.loads(raw_json)
-
-    return None
 
 if __name__ == '__main__':
     main()
