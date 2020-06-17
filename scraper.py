@@ -21,14 +21,14 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # The ID and range of a sample spreadsheet.
 APPLICATION_NAME = "Google Sheets API Python"
 TELEGRAM_BOT_ID = [
-    "BOT ID"]
-SPREADSHEET_ID = "SHEET ID"
-YOUTUBE_API_KEY = "API KEY"
+    "ID"]
+SPREADSHEET_ID = "ID"
+YOUTUBE_API_KEY = "KEY"
 PROXIES = [
     'ADDRESS']
-PROXY = "PAC FILE URL"
+PROXY = "URL"
 PAC = get_pac(url=PROXY)
-GECKO_PATH = "GECKO PATH"
+GECKO_PATH = "PATH"
 INSTAGRAM_ACCOUNT = {
   0 : {
     "username" : "username",
@@ -64,9 +64,11 @@ def main():
     selenium_proxy = webdriver.Proxy()
     selenium_proxy.proxy_type = webdriver.common.proxy.ProxyType.PAC
     selenium_proxy.proxyAutoconfigUrl = PROXY
+    #selenium_proxy.noProxy = ".instagram.com, .duckduckgo.com"
 
     profile = webdriver.FirefoxProfile()
     profile.set_proxy(selenium_proxy)
+    #profile.set_preference("network.proxy.no_proxies_on", ".instagram.com, .duckduckgo.com")
 
     driver = webdriver.Firefox(executable_path=GECKO_PATH)
     # Login Instagram account
@@ -102,6 +104,11 @@ def main():
             subscribers = get_youtube_subscribers(channel_id)
             print(subscribers)
             results.append(subscribers)
+        elif row[0]=='Facebook':
+            url = row[1]
+            followers = get_facebook_followers(url, driver)
+            print(followers)
+            results.append(followers)
         elif row[0]=='Twitter':
             url = row[1]
             followers = get_twitter_followers(url, driver)
@@ -202,9 +209,31 @@ def get_youtube_subscribers(url):
     except requests.exceptions.RequestException as err:
         print ("OOps: Something Else",err)
 
-def get_twitter_followers(url, driver):
+def get_facebook_followers(url, driver):
     try:
         sleep(random.uniform(3.0,7.0))
+        driver.get(url)
+        soup = bs(driver.page_source,"lxml")
+        result = soup.findAll("div",{"class":"_4bl9"})
+        if len(result) > 3:
+            follower = result[3].text.split()[0].replace(",","")
+            if follower.isdigit:
+                return follower
+            else:
+                return "NA"
+        else:
+            result = soup.findAll("span", {"class":"_2iem _50f7"})
+            if result:
+                follower = result[1].text.split()[2].replace(",","")
+                return follower
+            else:
+                return "NA"
+    except:
+        return "NA"
+
+def get_twitter_followers(url, driver):
+    try:
+        sleep(3)
         driver.get(url)
         soup = bs(driver.page_source,"lxml")
         result = soup.select('div > a')
