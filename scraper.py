@@ -22,10 +22,10 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 APPLICATION_NAME = "Google Sheets API Python"
 TELEGRAM_BOT_ID = [
     "BOT ID"]
-SPREADSHEET_ID = "ID"
+SPREADSHEET_ID = "SHEET ID"
 YOUTUBE_API_KEY = "API KEY"
 PROXIES = [
-    'IP ADDRESS']
+    'ADDRESS']
 PROXY = "PAC FILE URL"
 PAC = get_pac(url=PROXY)
 GECKO_PATH = "GECKO PATH"
@@ -64,11 +64,9 @@ def main():
     selenium_proxy = webdriver.Proxy()
     selenium_proxy.proxy_type = webdriver.common.proxy.ProxyType.PAC
     selenium_proxy.proxyAutoconfigUrl = PROXY
-    #selenium_proxy.noProxy = ".instagram.com, .duckduckgo.com"
 
     profile = webdriver.FirefoxProfile()
     profile.set_proxy(selenium_proxy)
-    #profile.set_preference("network.proxy.no_proxies_on", ".instagram.com, .duckduckgo.com")
 
     driver = webdriver.Firefox(executable_path=GECKO_PATH)
     # Login Instagram account
@@ -79,7 +77,7 @@ def main():
     sheet_name, column, size = get_range(sheet)
     start_row = 2
     end_row = size
-    working_range = sheet_name+"!D"+str(start_row)+":E"+str(end_row)
+    working_range = sheet_name+"!C"+str(start_row)+":D"+str(end_row)
     result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=working_range).execute()
     values = result.get('values', [])
 
@@ -104,6 +102,11 @@ def main():
             subscribers = get_youtube_subscribers(channel_id)
             print(subscribers)
             results.append(subscribers)
+        elif row[0]=='Twitter':
+            url = row[1]
+            followers = get_twitter_followers(url, driver)
+            print(followers)
+            results.append(followers)
         elif row[0]=='VK':
             url = row[1]
             followers = get_vk_followers(url, driver)
@@ -125,11 +128,11 @@ def get_telegram_subscribers(url, driver):
     try:
         sleep(random.uniform(3.0,7.0))
         #session = PACSession(PAC)
-        #driver.get(url)
-        #soup = bs(driver.page_source,"lxml")
-        response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
+        driver.get(url)
+        soup = bs(driver.page_source,"lxml")
+        #response = requests.get(url, proxies = {'http' : PROXIES[random.randint(0,4)]})
         #response = session.get(url)
-        soup = bs(response.text, 'html.parser')
+        #soup = bs(response.text, 'html.parser')
         result = soup.findAll('div', {'class':'tgme_page_extra'})
         if result:
             subscribers = re.split(r'\s\D',result[0].text.strip())[0].replace(" ","")
@@ -155,10 +158,7 @@ def get_instagram_followers(url, driver):
         soup = bs(driver.page_source,"lxml")
         result = soup.findAll("span",{"class":"g47SY"})
         if result:
-            followers = result[1].text.replace(",","")
-            if followers[-1]=="k":
-                followers = int(float(followers[:-1]) * 1000)
-                return followers
+            followers = result[1]["title"].replace(",","")
             return followers
         else:
             return "NA"
@@ -202,6 +202,20 @@ def get_youtube_subscribers(url):
     except requests.exceptions.RequestException as err:
         print ("OOps: Something Else",err)
 
+def get_twitter_followers(url, driver):
+    try:
+        sleep(random.uniform(3.0,7.0))
+        driver.get(url)
+        soup = bs(driver.page_source,"lxml")
+        result = soup.select('div > a')
+        if result:
+            followers = result[5]["title"].replace(",","")
+            return followers
+        else:
+            return "NA"
+    except:
+        return "NA"
+
 def get_vk_followers(url, driver):
     try:
         sleep(3)
@@ -233,7 +247,7 @@ def get_ok_followers(url, driver):
         else:
             result = soup.find("span",{"class":"navMenuCount"})
             if result is not None:
-                followers = int(''.join(filter(str.isdigit, fresult.text)))
+                followers = ''.join(filter(str.isdigit, result.text))
                 return followers
             else:
                 return "NA"
