@@ -1,2 +1,3 @@
 # data
-Jupyter Notebooks kaggle and datacamp projects
+
+Data scrapers from major social media platforms
